@@ -119,6 +119,7 @@ sub _view_changed {
             push @new_tiles, $self->_add_tile($x, $y, $view_tile);
         }
         if ($self->treasures->{$key} && !$view_tile->{treasure}) {
+            ### XXX don't go in here if I have taken the treasure
             $log->infof(
                 '%s: treasure at %d/%d taken by enemy',
                 $self->name, $x, $y
@@ -135,6 +136,7 @@ sub _view_changed {
     $self->_link_edges($_) foreach @new_tiles;
 
     ### XXX fold map if castle spotted?
+    ### XXX or allow multiple home castles and use nearest?
 
     return scalar(@new_tiles);
 }

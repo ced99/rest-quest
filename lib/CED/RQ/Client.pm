@@ -10,7 +10,7 @@ Log::Any::Adapter->set('Stdout');
 
 use CED::RQ::Map;
 use CED::RQ::SearchNavigator;
-use CED::RQ::HomeNavigator;
+use CED::RQ::TargetNavigator;
 
 use namespace::autoclean;
 
@@ -30,8 +30,8 @@ has '_ua', is => 'ro', isa => 'LWP::UserAgent', lazy => 1,
 has '_search_navigator', is => 'ro', isa => 'CED::RQ::SearchNavigator',
     lazy => 1, builder => '_build__search_navigator';
 
-has '_home_navigator', is => 'ro', isa => 'CED::RQ::HomeNavigator',
-    lazy => 1, builder => '_build__home_navigator';
+has '_target_navigator', is => 'ro', isa => 'CED::RQ::TargetNavigator',
+    lazy => 1, builder => '_build__target_navigator';
 
 sub _build_map {
     my ($self) = @_;
@@ -47,9 +47,9 @@ sub _build__search_navigator {
     return CED::RQ::SearchNavigator->new(map => $self->map);
 }
 
-sub _build__home_navigator {
+sub _build__target_navigator {
     my ($self) = @_;
-    return CED::RQ::HomeNavigator->new(map => $self->map);
+    return CED::RQ::TargetNavigator->new(map => $self->map);
 }
 
 sub _post {
@@ -85,8 +85,35 @@ sub _select_navigator {
     my ($self) = @_;
 
     if ($self->has_treasure) {
-        $log->infof('%s: picked up treasure - heading home', $self->name);
-        return $self->_home_navigator;
+        if (!$self->_target_navigator->target ||
+            ($self->map->home->key ne $self->_target_navigator->target->key)
+            ) {
+            $log->infof('%s: picked up treasure - heading home', $self->name);
+            $self->_target_navigator->target($self->map->home);
+        }
+        return $self->_target_navigator;
+    }
+
+    my $min_treasure_dist = 100000;
+    my $target_treasure;
+    foreach (values %{$self->map->treasures}) {
+        my $dist = $self->_target_navigator->distance_to_target($_);
+        if (defined $dist && $dist < $min_treasure_dist) {
+            $target_treasure = $_;
+        }
+    }
+
+    if ($target_treasure) {
+        if (!$self->_target_navigator->target ||
+            ($target_treasure->key ne $self->_target_navigator->target->key)
+            ) {
+            $log->infof(
+                '%s: targeting treasure at %s',
+                $self->name, $target_treasure->key
+                );
+            $self->_target_navigator->target($target_treasure);
+        }
+        return $self->_target_navigator;
     }
 
     return $self->_search_navigator;
