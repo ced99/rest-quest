@@ -4,7 +4,7 @@ use Moose;
 
 use namespace::autoclean;
 
-has 'path_len', is => 'ro', isa => 'Int', required => 1;
+has 'min_possible_len', is => 'ro', isa => 'Int', required => 1;
 has 'tile', is => 'ro', isa => 'CED::RQ::Tile', required => 1;
 has 'path', is => 'ro', isa => 'ArrayRef[Str]', default => sub{ [] };
 

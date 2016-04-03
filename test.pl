@@ -6,15 +6,17 @@ use CED::RQ::HomeNavigator;
 my $map = CED::RQ::Map->new(name => 'foobar');
 
 my $view = [];
-foreach my $y (1..13) {
+foreach my $y (-6..6) {
     my $row = [];
-    foreach my $x (1..13) {
+    foreach my $x (-6..6) {
         my $type = 'grass';
-        if (($x > 5) && (8 > $x)) {
-            if (($y > 5) && (8 > $y)) {
-                $type = 'water';
-            }
-        } elsif ($x == 4) {
+        if (($x >= -1) && ($x <= 1) && ($y == -1)) {
+            $type = 'water';
+        } elsif (($x == -1) && ($y >= -1) && ($y <= 1)) {
+            $type = 'water';
+        } elsif ($x == -5) {
+            $type = 'mountain';
+        } elsif ($x == -4 && $y == -3) {
             $type = 'mountain';
         }
         my $tile = {type => $type};
@@ -35,7 +37,7 @@ print "Start navigating\n";
 while ($map->current->key ne $map->home->key) {
     my $dir = $nav->calc_move();
     print "\t$dir\n";
-    $map->$dir();
+    $map->$dir([]);
 }
 
 print "Done\n";
