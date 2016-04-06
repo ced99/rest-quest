@@ -8,17 +8,22 @@ use CED::RQ::Client;
 
 my $name;
 my $baseurl;
+my $mode;
 
 GetOptions (
     'name=s' => \$name,
-    'url=s'   => \$baseurl
+    'url=s'  => \$baseurl,
+    'mode=s' => \$mode
     );
 
 $baseurl ||= 'http://localhost:3000';
 $name ||= Acme::MetaSyntactic->new('legomarvelsuperheroes')->name;
+$mode ||= 'auto';
 
 $baseurl =~ s{/$}{};
-my $client = CED::RQ::Client->new(name => $name, baseurl => $baseurl);
+my $client = CED::RQ::Client->new(
+    name => $name, baseurl => $baseurl, mode => lc $mode
+    );
 
 $client->play();
 

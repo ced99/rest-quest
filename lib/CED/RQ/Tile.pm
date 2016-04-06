@@ -45,6 +45,7 @@ sub _build_vision_diameter {
 sub key {
     my ($self) = @_;
 
+    ### XXX regard folded map
     return $self->calc_key($self->x, $self->y);
 }
 

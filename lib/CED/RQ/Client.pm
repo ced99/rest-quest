@@ -3,12 +3,14 @@ package CED::RQ::Client;
 use HTTP::Request;
 use JSON;
 use LWP::UserAgent;
+use Carp;
 use Moose;
 use Log::Any qw($log);
 use Log::Any::Adapter;
 Log::Any::Adapter->set('Stdout');
 
 use CED::RQ::Map;
+use CED::RQ::DummyNavigator;
 use CED::RQ::SearchNavigator;
 use CED::RQ::TargetNavigator;
 
@@ -16,6 +18,7 @@ use namespace::autoclean;
 
 has 'name', is => 'ro', isa => 'Str', required => 1;
 has 'baseurl', is => 'ro', isa => 'Str', required => 1;
+has 'mode', is => 'ro', isa => 'Str', default => 'auto';
 
 has 'map', is => 'ro', isa => 'CED::RQ::Map', lazy => 1,
     builder => '_build_map';
@@ -27,11 +30,8 @@ has '_moves', is => 'rw', isa => 'Int', default => 0;
 has '_ua', is => 'ro', isa => 'LWP::UserAgent', lazy => 1,
     builder => '_build__ua';
 
-has '_search_navigator', is => 'ro', isa => 'CED::RQ::SearchNavigator',
-    lazy => 1, builder => '_build__search_navigator';
-
-has '_target_navigator', is => 'ro', isa => 'CED::RQ::TargetNavigator',
-    lazy => 1, builder => '_build__target_navigator';
+has '_navigators', is => 'ro', isa => 'HashRef[CED::RQ::TargetNavigator]',
+    default => sub { {} };
 
 sub _build_map {
     my ($self) = @_;
@@ -40,16 +40,6 @@ sub _build_map {
 
 sub _build__ua {
     return LWP::UserAgent->new()
-}
-
-sub _build__search_navigator {
-    my ($self) = @_;
-    return CED::RQ::SearchNavigator->new(map => $self->map);
-}
-
-sub _build__target_navigator {
-    my ($self) = @_;
-    return CED::RQ::TargetNavigator->new(map => $self->map);
 }
 
 sub _post {
@@ -81,42 +71,68 @@ sub _move {
     return $self->_post('move', player => $self->name, direction => $direction);
 }
 
+sub _search_navigator {
+    my ($self) = @_;
+
+    unless ($self->_navigators->{search}) {
+        $self->_navigators->{search} =
+            CED::RQ::SearchNavigator->new(map => $self->map);
+    }
+    return $self->_navigators->{search};
+}
+
+sub _target_navigator {
+    my ($self, $target) = @_;
+
+    my $key = join(':', 'target', $target->key);
+
+    unless ($self->_navigators->{$key}) {
+        $log->infof('%s: heading for %s', $self->name, $target->key);
+        $self->_navigators->{$key} = CED::RQ::TargetNavigator->new(
+            map => $self->map, target => $target
+            );
+    }
+    return $self->_navigators->{$key};
+}
+
+sub _dummy_navigator {
+    my ($self) = @_;
+
+    unless ($self->_navigators->{dummy}) {
+        $self->_navigators->{dummy} =
+            CED::RQ::DummyNavigator->new(map => $self->map);
+    }
+    return $self->_navigators->{dummy};
+}
+
 sub _select_navigator {
     my ($self) = @_;
 
-    if ($self->has_treasure) {
-        if (!$self->_target_navigator->target ||
-            ($self->map->home->key ne $self->_target_navigator->target->key)
-            ) {
-            $log->infof('%s: picked up treasure - heading home', $self->name);
-            $self->_target_navigator->target($self->map->home);
+    if ($self->mode eq 'auto') {
+        if ($self->has_treasure) {
+            return $self->_target_navigator($self->map->home);
         }
-        return $self->_target_navigator;
-    }
 
-    my $min_treasure_dist = 100000;
-    my $target_treasure;
-    foreach (values %{$self->map->treasures}) {
-        my $dist = $self->_target_navigator->distance_to_target($_);
-        if (defined $dist && $dist < $min_treasure_dist) {
-            $target_treasure = $_;
+        my $min_treasure_dist = 100000;
+        my $target_treasure;
+        foreach (values %{$self->map->treasures}) {
+            my $dist = $self->_target_navigator($_)->distance_to_target;
+            if (defined $dist && $dist < $min_treasure_dist) {
+                $target_treasure = $_;
+            }
         }
-    }
 
-    if ($target_treasure) {
-        if (!$self->_target_navigator->target ||
-            ($target_treasure->key ne $self->_target_navigator->target->key)
-            ) {
-            $log->infof(
-                '%s: targeting treasure at %s',
-                $self->name, $target_treasure->key
-                );
-            $self->_target_navigator->target($target_treasure);
+        if ($target_treasure) {
+            return $self->_target_navigator($target_treasure);
         }
-        return $self->_target_navigator;
-    }
 
-    return $self->_search_navigator;
+        return $self->_search_navigator();
+    } elsif ($self->mode eq 'dummy') {
+        return $self->_dummy_navigator();
+    } else {
+        croak sprintf('%s: mode %s unsupported', $self->name, $self->mode);
+    }
+    return;
 }
 
 

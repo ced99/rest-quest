@@ -9,17 +9,7 @@ use namespace::autoclean;
 
 extends 'CED::RQ::Navigator';
 
-has 'target', is => 'rw', isa => 'CED::RQ::Tile', trigger => \&_target_set,;
-
-has '_current_path', is => 'rw', isa => 'ArrayRef[Str]', default => sub {[]};
-
-sub _target_set {
-    my ($self, $target, $old_target) = @_;
-
-    $self->_current_path([])
-        if ($old_target && ($target->key ne $old_target->key));
-    return;
-}
+has 'target', is => 'ro', isa => 'CED::RQ::Tile', required => 1;
 
 sub _dist {
     my ($self, $tile, $target) = @_;
@@ -29,7 +19,7 @@ sub _dist {
 }
 
 sub _find_path {
-    my ($self, $target) = @_;
+    my ($self) = @_;
 
     my $q = Hash::PriorityQueue->new();
 
@@ -37,13 +27,13 @@ sub _find_path {
     $q->insert(
         CED::RQ::PathItem->new(
             tile => $self->map->current,
-            min_possible_len => $self->_dist($self->map->current, $target)
+            min_possible_len => $self->_dist($self->map->current, $self->target)
         ),
         0
         );
     while (1) {
         my $item = $q->pop();
-        return $item if ($item->tile->key eq $target->key);
+        return $item if ($item->tile->key eq $self->target->key);
 
         $seen{$item->tile->key} = 1;
         foreach (qw/up down left right/) {
@@ -51,7 +41,8 @@ sub _find_path {
             next unless $edge;
             next if ($edge->target->deadly);
             next if ($seen{$edge->target->key});
-            my $dist = $self->_dist($edge->target, $target) + $edge->overhead;
+            my $dist =
+                $self->_dist($edge->target, $self->target) + $edge->overhead;
 
             my $new_item = CED::RQ::PathItem->new(
                 min_possible_len => $dist,
@@ -67,20 +58,16 @@ sub _find_path {
 sub calc_move {
     my ($self) = @_;
 
-    ### XXX recalc path if map has changed
-
-    $self->_current_path($self->_find_path($self->target)->path)
-        unless (@{$self->_current_path});
-
-    return shift @{$self->_current_path};
+    ### XXX optimize: don't recalc path if current and map have not changed
+    my $path = $self->_find_path()->path;
+    return shift @$path;
 }
 
 sub distance_to_target {
-    my ($self, $target) = @_;
+    my ($self) = @_;
 
-    ### XXX rewrite this class to re-use existing path
-    ### XXX if $target is $self->target
-    return $self->_find_path($target)->min_possible_len;
+    ### XXX optimize: don't recalc path if current and map have not changed
+    return $self->_find_path()->min_possible_len;
 }
 
 __PACKAGE__->meta->make_immutable();

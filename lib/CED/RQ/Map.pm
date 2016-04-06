@@ -1,5 +1,6 @@
 package CED::RQ::Map;
 
+use Carp;
 use Geometry::AffineTransform;
 use Moose;
 use Log::Any qw($log);
@@ -13,6 +14,10 @@ has 'tiles', is => 'ro', isa => 'HashRef[CED::RQ::Tile]',
     default => sub { {} };
 has 'current', is => 'rw', isa => 'CED::RQ::Tile';
 has 'home', is => 'rw', isa => 'CED::RQ::Tile';
+has 'enemy', is => 'rw', isa => 'CED::RQ::Tile';
+
+has 'size_x', is => 'rw', isa => 'Int';
+has 'size_y', is => 'rw', isa => 'Int';
 
 has 'treasures', is => 'ro', isa => 'HashRef[CED::RQ::Tile]',
     default => sub { {} };
@@ -24,9 +29,61 @@ my %_rev_directions = (
     right => 'left',
     );
 
+sub reversed {
+    my ($self, $direction) = @_;
+
+    return $_rev_directions{$direction};
+}
+
+sub _fold_x {
+    my ($self, $size) = @_;
+
+    croak "Folding x again by $size - this should not happen"
+        if (defined $self->size_x);
+
+    $log->info("Map seems to be $size tiles wide -> folding");
+    $self->size_x($size);
+
+    ### XXX implement me
+    return;
+}
+
+sub _fold_y {
+    my ($self, $size) = @_;
+
+    croak "Folding y again by $size - this should not happen"
+        if (defined $self->size_y);
+
+    $log->info("Map seems to be $size tiles high -> folding");
+    $self->size_y($size);
+
+    ### XXX implement me
+    return;
+}
+
+sub _fold {
+    my ($self, @tiles_to_fold) = @_;
+
+    my $x_size;
+    my $y_size;
+    foreach (@tiles_to_fold) {
+        my ($orig, $alias) = @$_;
+        if (!$x_size && ($orig->x != $alias->x)) {
+            $x_size = abs($orig->x - $alias->x);
+        }
+        if (!$y_size && ($orig->y != $alias->y)) {
+            $y_size = abs($orig->y - $alias->y);
+        }
+    }
+    $self->_fold_x($x_size) if $x_size;
+    $self->_fold_y($y_size) if $y_size;
+    return;
+}
+
 sub _add_tile {
     my ($self, $x, $y, $raw) = @_;
 
+    my @to_fold;
     my $tile = CED::RQ::Tile->new(
         x => $x,
         y => $y,
@@ -48,7 +105,19 @@ sub _add_tile {
             );
         $self->treasures->{$tile->key} = $tile;
     }
-    return $tile;
+    if ($tile->castle eq 'home'){
+        if ($self->home->key ne $tile->key) {
+            push @to_fold, [$tile, $self->home];
+        }
+    }
+    if ($tile->castle eq 'enemy ') {
+        if ($self->enemy && ($self->enemy->key ne $tile->key)) {
+            push @to_fold, [$tile, $self->enemy];
+        } else {
+            $self->enemy($tile);
+        }
+    }
+    return $tile, @to_fold;
 }
 
 sub _link_edge {
@@ -57,7 +126,7 @@ sub _link_edge {
     if (my $other = $self->tiles->{$other_key}) {
         my $edge = CED::RQ::Edge->new(source => $tile, target => $other);
         $tile->$direction($edge);
-        my $rev_direction = $_rev_directions{$direction};
+        my $rev_direction = $self->reversed($direction);
         my $rev_edge = CED::RQ::Edge->new(source => $other, target => $tile);
         $other->$rev_direction($rev_edge);
     }
@@ -107,6 +176,7 @@ sub _view_changed {
         $self->_tile_coordinates($x_center, $y_center, scalar(@$data));
 
     $trans->invert();
+    my @tiles_to_fold;
     foreach (@coords) {
         my ($x, $y) = @$_;
         my $key = CED::RQ::Tile->calc_key($x, $y);
@@ -116,7 +186,9 @@ sub _view_changed {
         unless ($self->tiles->{$key}) {
             my ($view_x, $view_y) = $trans->transform($x, $y);
             my $view_tile = $data->[$view_y]->[$view_x];
-            push @new_tiles, $self->_add_tile($x, $y, $view_tile);
+            my ($new_tile, @to_fold) = $self->_add_tile($x, $y, $view_tile);
+            push @new_tiles, $new_tile;
+            push @tiles_to_fold, @to_fold;
         }
         if ($self->treasures->{$key} && !$view_tile->{treasure}) {
             ### XXX don't go in here if I have taken the treasure
@@ -135,9 +207,7 @@ sub _view_changed {
     $self->current->visited(1);
     $self->_link_edges($_) foreach @new_tiles;
 
-    ### XXX fold map if castle spotted?
-    ### XXX or allow multiple home castles and use nearest?
-
+    $self->_fold(@tiles_to_fold);
     return scalar(@new_tiles);
 }
 
