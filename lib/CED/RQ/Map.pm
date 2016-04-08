@@ -202,9 +202,8 @@ sub _view_changed {
             push @tiles_to_fold, @to_fold;
         }
         if ($self->treasures->{$key} && !$view_tile->{treasure}) {
-            ### XXX don't go in here if I have taken the treasure
             $log->infof(
-                '%s: treasure at %d/%d taken by enemy',
+                '%s: treasure at %d/%d taken',
                 $self->name, $x, $y
                 );
             $self->treasures->{$key}->treasure(0);
