@@ -8,9 +8,12 @@ use CED::RQ::TargetNavigator;
 use TestMap;
 my $fname = $ARGV[0];
 
-my $tmap = TestMap->from_file($fname);
+my $tmap = TestMap->from_file('foobar', $fname);
 my $map = CED::RQ::Map->new(name => 'foobar');
+$map->init($tmap->current_data);
 
+$map->up($tmap->up()) foreach(1..6);
+$map->left($tmap->left()) foreach (1..6);
 my $nav = CED::RQ::TargetNavigator->new(map => $map, target => $map->home);
 
 print "Start navigating\n";
