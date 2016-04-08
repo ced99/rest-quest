@@ -15,10 +15,10 @@ has 'y', is => 'rw', isa => 'Int', required => 1;
 
 has 'visited', is => 'rw', isa => 'Bool', default => 0;
 
-has 'up', is => 'rw', isa => 'CED::RQ::Edge';
-has 'down', is => 'rw', isa => 'CED::RQ::Edge';
-has 'left', is => 'rw', isa => 'CED::RQ::Edge';
-has 'right', is => 'rw', isa => 'CED::RQ::Edge';
+has 'up', is => 'rw', isa => 'Maybe[CED::RQ::Edge]';
+has 'down', is => 'rw', isa => 'Maybe[CED::RQ::Edge]';
+has 'left', is => 'rw', isa => 'Maybe[CED::RQ::Edge]';
+has 'right', is => 'rw', isa => 'Maybe[CED::RQ::Edge]';
 
 has 'deadly', is => 'ro', isa => 'Bool', lazy => 1, builder => '_build_deadly';
 has 'vision_diameter', is => 'ro', isa => 'Int', lazy => 1,

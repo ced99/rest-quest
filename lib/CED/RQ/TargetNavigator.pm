@@ -14,8 +14,17 @@ has 'target', is => 'ro', isa => 'CED::RQ::Tile', required => 1;
 sub _dist {
     my ($self, $tile, $target) = @_;
 
-    ### XXX if map is folded -> modulo
-    return abs($target->x - $tile->x) + abs($target->y - $tile->y);
+    my $dist_x = abs($target->x - $tile->x);
+    if ($self->map->size_x) {
+        my $dist_x_wrapped = abs(($target->x + $self->map->size_x) - $tile->x);
+        $dist_x = $dist_x_wrapped if $dist_x_wrapped < $dist_x;
+    }
+    my $dist_y = abs($target->y - $tile->y);
+    if ($self->map->size_y) {
+        my $dist_y_wrapped = abs(($target->y + $self->map->size_y) - $tile->y);
+        $dist_y = $dist_y_wrapped if $dist_y_wrapped < $dist_y;
+    }
+    return $dist_x + $dist_y;
 }
 
 sub _find_path {

@@ -1,36 +1,41 @@
 #!/usr/bin/env perl
 
+use Log::Any::Adapter;
+Log::Any::Adapter->set('Stdout');
+
 use CED::RQ::Map;
-use CED::RQ::HomeNavigator;
+use CED::RQ::TargetNavigator;
 
 my $map = CED::RQ::Map->new(name => 'foobar');
 
 my $view = [];
-foreach my $y (-6..6) {
+foreach my $y (-2..2) {
     my $row = [];
-    foreach my $x (-6..6) {
+    foreach my $x (-2..2) {
+        my $castle = '';
         my $type = 'grass';
-        if (($x >= -1) && ($x <= 1) && ($y == -1)) {
-            $type = 'water';
-        } elsif (($x == -1) && ($y >= -1) && ($y <= 1)) {
-            $type = 'water';
-        } elsif ($x == -5) {
-            $type = 'mountain';
-        } elsif ($x == -4 && $y == -3) {
-            $type = 'mountain';
+        if ($x == 0 && $y == 0) {
+            $castle = 'foobar';
         }
-        my $tile = {type => $type};
+        my $tile = {type => $type, castle => $castle};
         push @$row, $tile;
     }
     push @$view, $row;
 }
 
 $map->init($view);
-$map->left([]) foreach (1..5);
-$map->up([]) foreach (1..6);
+$map->left([]) foreach (1..2);
+$map->up([]) foreach (1..2);
 
+$view->[2]->[2]->{castle} = '';
 
-my $nav = CED::RQ::HomeNavigator->new(map => $map);
+$map->left($view) foreach (1..3);
+$map->up($view) foreach (1..3);
+
+$view->[0]->[2]->{castle} = 'foobar';
+$map->up($view);
+
+my $nav = CED::RQ::TargetNavigator->new(map => $map, target => $map->home);
 
 print "Start navigating\n";
 

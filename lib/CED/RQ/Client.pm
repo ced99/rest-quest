@@ -6,8 +6,6 @@ use LWP::UserAgent;
 use Carp;
 use Moose;
 use Log::Any qw($log);
-use Log::Any::Adapter;
-Log::Any::Adapter->set('Stdout');
 
 use CED::RQ::Map;
 use CED::RQ::DummyNavigator;
@@ -136,29 +134,45 @@ sub _select_navigator {
 }
 
 
+sub is_over {
+    my ($self, $reply) = @_;
+
+    my $final_state;
+    if (($reply->{game} || '') eq 'over') {
+        $final_state = $reply->{result};
+    } elsif ($reply->{error}) {
+        $final_state = sprintf('aborted (%s)', $reply->{error});
+    } elsif (!$reply->{view}) {
+        $final_state = 'undefined (no view returned)';
+    }
+    if ($final_state) {
+        $log->infof(
+            '%s: game %s - %d moves taken',
+            $self->name, $final_state, $self->_moves
+            );
+        return 1;
+    }
+    return 0;
+}
+
 sub play {
     my ($self) = @_;
 
     my $data = $self->_register();
+    return if $self->is_over($data);
     $self->map->init($data->{view});
 
-    my $result;
-
-    while (!$result) {
+    while (1) {
         my $data;
         my $direction = $self->_select_navigator->calc_move();
         my $steps = $self->map->current->$direction->steps;
-        $data = $self->_move($direction) foreach (1..$steps);
-
-        if (($data->{game} || '') eq 'over') {
-            $result = $data->{result};
-        } else {
-            $self->has_treasure($data->{treasure} ? 1 : 0);
-            $self->map->$direction($data->{view});
+        foreach (1..$steps) {
+            $data = $self->_move($direction);
+            return if $self->is_over($data);
         }
+        $self->has_treasure($data->{treasure} ? 1 : 0);
+        $self->map->$direction($data->{view});
     }
-
-    $log->infof('Game %s - %d moves taken', $result, $self->_moves);
     return;
 }
 

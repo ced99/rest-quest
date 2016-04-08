@@ -35,32 +35,6 @@ sub reversed {
     return $_rev_directions{$direction};
 }
 
-sub _fold_x {
-    my ($self, $size) = @_;
-
-    croak "Folding x again by $size - this should not happen"
-        if (defined $self->size_x);
-
-    $log->info("Map seems to be $size tiles wide -> folding");
-    $self->size_x($size);
-
-    ### XXX implement me
-    return;
-}
-
-sub _fold_y {
-    my ($self, $size) = @_;
-
-    croak "Folding y again by $size - this should not happen"
-        if (defined $self->size_y);
-
-    $log->info("Map seems to be $size tiles high -> folding");
-    $self->size_y($size);
-
-    ### XXX implement me
-    return;
-}
-
 sub _fold {
     my ($self, @tiles_to_fold) = @_;
 
@@ -75,8 +49,37 @@ sub _fold {
             $y_size = abs($orig->y - $alias->y);
         }
     }
-    $self->_fold_x($x_size) if $x_size;
-    $self->_fold_y($y_size) if $y_size;
+    foreach my $tile (values %{$self->tiles}) {
+        my $changed;
+        my $old_key = $tile->key;
+        if ($x_size) {
+            $changed ||= (($tile->x % $x_size) != $tile->x);
+            $tile->x($tile->x % $x_size);
+        }
+        if ($y_size) {
+            $changed ||= (($tile->y % $y_size) != $tile->y);
+            $tile->y($tile->y % $y_size);
+        }
+        if ($changed) {
+            my $new_key = $tile->key;
+            if (my $alias = $self->tiles->{$new_key}) {
+                $tile->visited($tile->visited || $alias->visited);
+                $tile->treasure($tile->treasure && $alias->treasure);
+            }
+            $self->tiles->{$new_key} = $tile;
+            delete $self->tiles->{$old_key};
+        }
+        $tile->$_(undef) foreach (qw/up down left right/);
+    }
+    if ($x_size) {
+        $log->info("Map seems to be $x_size tiles wide -> folded");
+        $self->size_x($x_size);
+    }
+    if ($y_size) {
+        $log->info("Map seems to be $y_size tiles high -> folded");
+        $self->size_y($y_size);
+    }
+    $self->_link_edges($_) foreach (values %{$self->tiles});
     return;
 }
 
@@ -105,8 +108,8 @@ sub _add_tile {
             );
         $self->treasures->{$tile->key} = $tile;
     }
-    if ($tile->castle eq 'home'){
-        if ($self->home->key ne $tile->key) {
+    if ($tile->castle eq 'own'){
+        if ($self->home && ($self->home->key ne $tile->key)) {
             push @to_fold, [$tile, $self->home];
         }
     }
@@ -137,16 +140,24 @@ sub _link_edge {
 sub _link_edges {
     my ($self, $tile) = @_;
 
-    my $up_key = CED::RQ::Tile->calc_key($tile->x, $tile->y - 1);
+    my $up_y = $tile->y - 1;
+    my $down_y = $tile->y + 1;
+    my $left_x = $tile->x - 1;
+    my $right_x = $tile->x + 1;
+    $left_x %= $self->size_x if $self->size_x;
+    $right_x %= $self->size_x if $self->size_x;
+    $up_y %= $self->size_y if $self->size_y;
+    $down_y %= $self->size_y if $self->size_y;
+    my $up_key = CED::RQ::Tile->calc_key($tile->x, $up_y);
     $self->_link_edge($tile, $up_key, 'up');
 
-    my $down_key = CED::RQ::Tile->calc_key($tile->x, $tile->y + 1);
+    my $down_key = CED::RQ::Tile->calc_key($tile->x, $down_y);
     $self->_link_edge($tile, $down_key, 'down');
 
-    my $left_key = CED::RQ::Tile->calc_key($tile->x - 1, $tile->y);
+    my $left_key = CED::RQ::Tile->calc_key($left_x, $tile->y);
     $self->_link_edge($tile, $left_key, 'left');
 
-    my $right_key = CED::RQ::Tile->calc_key($tile->x + 1, $tile->y);
+    my $right_key = CED::RQ::Tile->calc_key($right_x, $tile->y);
     $self->_link_edge($tile, $right_key, 'right');
 
     return;
@@ -179,13 +190,13 @@ sub _view_changed {
     my @tiles_to_fold;
     foreach (@coords) {
         my ($x, $y) = @$_;
-        my $key = CED::RQ::Tile->calc_key($x, $y);
         my ($view_x, $view_y) = $trans->transform($x, $y);
+        $x %= $self->size_x if $self->size_x;
+        $y %= $self->size_y if $self->size_y;
+        my $key = CED::RQ::Tile->calc_key($x, $y);
         my $view_tile = $data->[$view_y]->[$view_x];
 
         unless ($self->tiles->{$key}) {
-            my ($view_x, $view_y) = $trans->transform($x, $y);
-            my $view_tile = $data->[$view_y]->[$view_x];
             my ($new_tile, @to_fold) = $self->_add_tile($x, $y, $view_tile);
             push @new_tiles, $new_tile;
             push @tiles_to_fold, @to_fold;
@@ -200,7 +211,8 @@ sub _view_changed {
             delete $self->treasures->{$key};
         }
     }
-
+    $x_center %= $self->size_x if $self->size_x;
+    $y_center %= $self->size_y if $self->size_y;
     $self->current(
         $self->tiles->{CED::RQ::Tile->calc_key($x_center, $y_center)}
         );
@@ -266,6 +278,8 @@ sub possible_vision_size {
         );
     foreach (@coords) {
         my ($x, $y) = @$_;
+        $x %= $self->size_x if $self->size_x;
+        $y %= $self->size_y if $self->size_y;
         my $key = CED::RQ::Tile->calc_key($x, $y);
         $result{$key} = 1;
     }

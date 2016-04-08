@@ -10,6 +10,10 @@ sub _calc_score {
     my ($self, $direction) = @_;
 
     my $edge = $self->map->current->$direction();
+    if (!$edge) {
+        use Data::Dumper;
+        print $self->map->name . ': ' . Dumper($self->map->current) . "\n";
+    }
     my $tile = $edge->target;
 
     return -10000 if $tile->deadly;

@@ -2,6 +2,8 @@
 
 use Acme::MetaSyntactic;
 use Getopt::Long;
+use Log::Any::Adapter;
+Log::Any::Adapter->set('Stdout');
 
 use CED::RQ::Client;
 
