@@ -10,6 +10,9 @@ use namespace::autoclean;
 extends 'CED::RQ::Navigator';
 
 has 'target', is => 'ro', isa => 'CED::RQ::Tile', required => 1;
+has '_last_map_revision', is => 'rw', isa => 'Int', default => -1;
+has '_current_path', is => 'rw', isa => 'CED::RQ::PathItem';
+has '_current', is => 'rw', isa => 'CED::RQ::Tile';
 
 sub _dist {
     my ($self, $tile, $target) = @_;
@@ -30,16 +33,18 @@ sub _dist {
 sub _find_path {
     my ($self) = @_;
 
+    print "Recalc\n";
+    $self->_last_map_revision($self->map->revision);
+    $self->_current($self->map->current);
     my $q = Hash::PriorityQueue->new();
 
     my %seen;
-    $q->insert(
-        CED::RQ::PathItem->new(
-            tile => $self->map->current,
-            min_possible_len => $self->_dist($self->map->current, $self->target)
-        ),
-        0
+    my $first_item = CED::RQ::PathItem->new(
+        start => $self->map->current,
+        tile => $self->map->current,
+        min_possible_len => $self->_dist($self->map->current, $self->target)
         );
+    $q->insert($first_item, $first_item->min_possible_len);
     while (1) {
         my $item = $q->pop();
         return $item if ($item->tile->key eq $self->target->key);
@@ -54,6 +59,7 @@ sub _find_path {
                 $self->_dist($edge->target, $self->target) + $edge->overhead;
 
             my $new_item = CED::RQ::PathItem->new(
+                start => $item->start,
                 min_possible_len => $dist,
                 tile => $edge->target,
                 path => [@{$item->path}, $_]
@@ -67,16 +73,26 @@ sub _find_path {
 sub calc_move {
     my ($self) = @_;
 
-    ### XXX optimize: don't recalc path if current and map have not changed
-    my $path = $self->_find_path()->path;
-    return shift @$path;
+    $self->_current_path($self->_find_path())
+        if (($self->_last_map_revision != $self->map->revision) ||
+            ($self->_current->key ne $self->map->current->key));
+    return $self->_current_path->path->[0];
 }
 
 sub distance_to_target {
     my ($self) = @_;
 
-    ### XXX optimize: don't recalc path if current and map have not changed
-    return $self->_find_path()->min_possible_len;
+    $self->_current_path($self->_find_path())
+        if (($self->_last_map_revision != $self->map->revision) ||
+            ($self->_current->key ne $self->map->current->key));
+    return $self->_current_path->min_possible_len;
+}
+
+sub consume {
+    my ($self, $direction) = @_;
+
+    $self->_current_path->consume($direction);
+    $self->_current($self->_current->$direction->target);
 }
 
 __PACKAGE__->meta->make_immutable();

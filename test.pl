@@ -21,7 +21,8 @@ print "Start navigating\n";
 while ($map->current->key ne $map->home->key) {
     my $dir = $nav->calc_move();
     print "\t$dir\n";
-    $map->$dir([]);
+    $map->$dir($tmap->$dir());
+    $nav->consume($dir);
 }
 
 print "Done\n";

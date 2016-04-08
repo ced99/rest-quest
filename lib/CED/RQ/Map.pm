@@ -22,6 +22,8 @@ has 'size_y', is => 'rw', isa => 'Int';
 has 'treasures', is => 'ro', isa => 'HashRef[CED::RQ::Tile]',
     default => sub { {} };
 
+has 'revision', is => 'rw', isa => 'Int', default => 0;
+
 my %_rev_directions = (
     up => 'down',
     down => 'up',
@@ -219,7 +221,8 @@ sub _view_changed {
     $self->_link_edges($_) foreach @new_tiles;
 
     $self->_fold(@tiles_to_fold);
-    return scalar(@new_tiles);
+    $self->revision($self->revision + 1) if (@new_tiles);
+    return;
 }
 
 sub init {

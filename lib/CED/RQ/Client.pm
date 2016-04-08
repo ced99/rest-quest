@@ -164,7 +164,8 @@ sub play {
 
     while (1) {
         my $data;
-        my $direction = $self->_select_navigator->calc_move();
+        my $navi = $self->_select_navigator;
+        my $direction = $navi->calc_move();
         my $steps = $self->map->current->$direction->steps;
         foreach (1..$steps) {
             $data = $self->_move($direction);
@@ -172,6 +173,7 @@ sub play {
         }
         $self->has_treasure($data->{treasure} ? 1 : 0);
         $self->map->$direction($data->{view});
+        $navi->consume($direction);
     }
     return;
 }
