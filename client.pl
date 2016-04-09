@@ -7,7 +7,6 @@ Log::Any::Adapter->set('Stdout');
 
 use CED::RQ::Client;
 
-
 my $name;
 my $baseurl;
 my $mode;
