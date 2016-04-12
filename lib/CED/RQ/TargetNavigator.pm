@@ -33,7 +33,6 @@ sub _dist {
 sub _find_path {
     my ($self) = @_;
 
-    print "Recalc\n";
     $self->_last_map_revision($self->map->revision);
     $self->_current($self->map->current);
     my $q = Hash::PriorityQueue->new();

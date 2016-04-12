@@ -9,23 +9,36 @@ use CED::RQ::Client;
 
 my $name;
 my $baseurl;
-my $mode;
+my $replay;
 
 GetOptions (
     'name=s' => \$name,
     'url=s'  => \$baseurl,
-    'mode=s' => \$mode
+    'replay!' => \$replay
     );
 
 $baseurl ||= 'http://localhost:3000';
 $name ||= Acme::MetaSyntactic->new('legomarvelsuperheroes')->name;
-$mode ||= 'auto';
 
+my %results;
 $baseurl =~ s{/$}{};
-my $client = CED::RQ::Client->new(
-    name => $name, baseurl => $baseurl, mode => lc $mode
-    );
 
-$client->play();
+$SIG{INT} = $SIG{TERM} = sub {$replay = 0};
+
+do {
+    my $client = CED::RQ::Client->new(
+        name => $name, baseurl => $baseurl
+        );
+
+    $client->play();
+    $results{$client->final_state}++;
+    $client->reset();
+    if ($replay) {
+        print "Current results for $name:\n";
+        foreach (sort keys %results) {
+            print "\t$_: " . $results{$_} . "\n"
+        }
+    }
+} while ($replay);
 
 exit 0;

@@ -8,7 +8,6 @@ use Moose;
 use Log::Any qw($log);
 
 use CED::RQ::Map;
-use CED::RQ::DummyNavigator;
 use CED::RQ::SearchNavigator;
 use CED::RQ::TargetNavigator;
 
@@ -16,7 +15,8 @@ use namespace::autoclean;
 
 has 'name', is => 'ro', isa => 'Str', required => 1;
 has 'baseurl', is => 'ro', isa => 'Str', required => 1;
-has 'mode', is => 'ro', isa => 'Str', default => 'auto';
+
+has 'final_state', is => 'rw', isa => 'Str', default => '';
 
 has 'map', is => 'ro', isa => 'CED::RQ::Map', lazy => 1,
     builder => '_build_map';
@@ -40,6 +40,18 @@ sub _build__ua {
     return LWP::UserAgent->new()
 }
 
+sub _get {
+    my ($self, $endpoint) = @_;
+    my $url = join('/', $self->baseurl, "$endpoint/");
+    my $res = $self->_ua->get($url);
+    unless ($res->is_success) {
+        die sprintf("$endpoint: Got status %d from server: %s",
+                    $res->code, $res->content || '???'
+            );
+    }
+    return $res->content;
+}
+
 sub _post {
     my ($self, $endpoint, %data) = @_;
     my $url = join('/', $self->baseurl, "$endpoint/");
@@ -49,7 +61,7 @@ sub _post {
         Content => [%data]
         );
     unless ($res->is_success) {
-        die sprintf("Got status %d from server: %s",
+        die sprintf("$endpoint: Got status %d from server: %s",
                     $res->code, $res->content || '???'
             );
     }
@@ -93,62 +105,44 @@ sub _target_navigator {
     return $self->_navigators->{$key};
 }
 
-sub _dummy_navigator {
-    my ($self) = @_;
-
-    unless ($self->_navigators->{dummy}) {
-        $self->_navigators->{dummy} =
-            CED::RQ::DummyNavigator->new(map => $self->map);
-    }
-    return $self->_navigators->{dummy};
-}
-
 sub _select_navigator {
     my ($self) = @_;
 
-    if ($self->mode eq 'auto') {
-        if ($self->has_treasure) {
-            return $self->_target_navigator($self->map->home);
-        }
-
-        my $min_treasure_dist = 100000;
-        my $target_treasure;
-        foreach (values %{$self->map->treasures}) {
-            my $dist = $self->_target_navigator($_)->distance_to_target;
-            if (defined $dist && $dist < $min_treasure_dist) {
-                $target_treasure = $_;
-            }
-        }
-
-        if ($target_treasure) {
-            return $self->_target_navigator($target_treasure);
-        }
-
-        return $self->_search_navigator();
-    } elsif ($self->mode eq 'dummy') {
-        return $self->_dummy_navigator();
-    } else {
-        croak sprintf('%s: mode %s unsupported', $self->name, $self->mode);
+    if ($self->has_treasure) {
+        return $self->_target_navigator($self->map->home);
     }
-    return;
+
+    my $min_treasure_dist = 100000;
+    my $target_treasure;
+    foreach (values %{$self->map->treasures}) {
+        my $dist = $self->_target_navigator($_)->distance_to_target;
+        if (defined $dist && $dist < $min_treasure_dist) {
+            $target_treasure = $_;
+        }
+    }
+
+    if ($target_treasure) {
+        return $self->_target_navigator($target_treasure);
+    }
+
+    return $self->_search_navigator();
 }
 
 
 sub is_over {
     my ($self, $reply) = @_;
 
-    my $final_state;
     if (($reply->{game} || '') eq 'over') {
-        $final_state = $reply->{result};
+        $self->final_state($reply->{result});
     } elsif ($reply->{error}) {
-        $final_state = sprintf('aborted (%s)', $reply->{error});
+        $self->final_state(sprintf('aborted (%s)', $reply->{error}));
     } elsif (!$reply->{view}) {
-        $final_state = 'undefined (no view returned)';
+        $self->final_state('undefined (no view returned)');
     }
-    if ($final_state) {
+    if ($self->final_state) {
         $log->infof(
             '%s: game %s - %d moves taken',
-            $self->name, $final_state, $self->_moves
+            $self->name, $self->final_state, $self->_moves
             );
         return 1;
     }
@@ -175,6 +169,13 @@ sub play {
         $self->map->$direction($data->{view});
         $navi->consume($direction);
     }
+    return;
+}
+
+sub reset {
+    my ($self) = @_;
+
+    $self->_get('reset');
     return;
 }
 
