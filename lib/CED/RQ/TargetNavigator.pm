@@ -11,8 +11,15 @@ extends 'CED::RQ::Navigator';
 
 has 'target', is => 'ro', isa => 'CED::RQ::Tile', required => 1;
 has '_last_map_revision', is => 'rw', isa => 'Int', default => -1;
-has '_current_path', is => 'rw', isa => 'CED::RQ::PathItem';
+has '_current_path', is => 'rw', isa => 'Maybe[CED::RQ::PathItem]';
 has '_current', is => 'rw', isa => 'CED::RQ::Tile';
+has '_search_fallback', is => 'ro', isa => 'CED::RQ::SearchNavigator',
+    lazy => 1, builder => '_build__search_fallback';
+
+sub _build__search_fallback {
+    my ($self) = @_;
+    return CED::RQ::SearchNavigator->new(map => $self->map);
+}
 
 sub _dist {
     my ($self, $tile, $target) = @_;
@@ -46,6 +53,7 @@ sub _find_path {
     $q->insert($first_item, $first_item->min_possible_len);
     while (1) {
         my $item = $q->pop();
+        return unless $item;
         return $item if ($item->tile->key eq $self->target->key);
 
         $seen{$item->tile->key} = 1;
@@ -73,18 +81,24 @@ sub calc_move {
     my ($self) = @_;
 
     $self->_current_path($self->_find_path())
-        if (($self->_last_map_revision != $self->map->revision) ||
+        if (!$self->_current_path ||
+            ($self->_last_map_revision != $self->map->revision) ||
             ($self->_current->key ne $self->map->current->key));
-    return $self->_current_path->path->[0];
+    if ($self->_current_path) {
+        return $self->_current_path->path->[0];
+    } else {
+        return $self->_search_fallback->calc_move();
+    }
 }
 
 sub distance_to_target {
     my ($self) = @_;
 
     $self->_current_path($self->_find_path())
-        if (($self->_last_map_revision != $self->map->revision) ||
+        if (!$self->_current_path ||
+            ($self->_last_map_revision != $self->map->revision) ||
             ($self->_current->key ne $self->map->current->key));
-    return $self->_current_path->min_possible_len;
+    return $self->_current_path && $self->_current_path->min_possible_len;
 }
 
 sub consume {

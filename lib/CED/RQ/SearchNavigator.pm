@@ -13,16 +13,13 @@ sub _calc_score {
     my $tile = $edge->target;
 
     return -10000 if $tile->deadly;
+    return -100 if $tile->visited;
 
     my $result = 0;
     my $vision_size = $self->map->vision_size;
     my $new_vision_size = $self->map->possible_vision_size($tile->x, $tile->y);
     $result += ($new_vision_size - $vision_size) * 100;
-
-    $result -= 50 if ($tile->visited);
-    ### XXX mountain delay
-    ### XXX further view gain by surrounding tiles
-    ### XXX amount of water
+    $result -= 50 * ($edge->steps - 1);
 
     return $result;
 }
