@@ -36,7 +36,8 @@ sub _calc_move {
         my ( $score, $new_vision ) = $self->_calc_score( $edge, $vision );
         push( @{ $scores{$score} }, [ $_, $new_vision ] ) if defined $score;
     }
-    my $max_score      = max keys %scores;
+    my $max_score = max keys %scores;
+    return ( 0, 'up' ) unless defined $max_score;
     my $dirs_n_visions = $scores{$max_score};
     my $dir_to_go      = $dirs_n_visions->[0]->[0];
     if ( $lookahead && ( @$dirs_n_visions > 1 ) ) {
